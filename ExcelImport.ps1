@@ -1,4 +1,4 @@
-#  SCRIPT MISSION
+#  LOGIC EXPLAINED
 # ---------------
 # This script aims to export data in an Excel file. We achieve this following this logic:
 #
