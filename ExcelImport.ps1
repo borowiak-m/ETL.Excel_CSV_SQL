@@ -94,7 +94,7 @@ if ($lastModifiedTime -gt $lastKnownTime) {
             Write-Host ("Debug: Matching with sheet name: " + $sheetToExport)
             
             If ($sheet -eq $sheetToExport) {
-                Write-Host " - - - > $sheet and $sheetToExport [MATCH]"
+                Write-Host "Debug:  - - - > $sheet and $sheetToExport [MATCH]"
                 $counter = $counter + 1
 
                 # Build file path for csv file export with sheet name
@@ -122,14 +122,14 @@ if ($lastModifiedTime -gt $lastKnownTime) {
 
             } else {
 
-                Write-Host "$sheet and $sheetToExport [NO MATCH]"
+                Write-Host "Debug: $sheet and $sheetToExport [NO MATCH]"
 
             }
         }
 
     }
 
-    Write-Host "Total matches : $counter"
+    Write-Host "Debug: Total matches : $counter"
 
     # After all tabs are processed, update the last modification date in the text file for next run
     Set-Content $lastTimeFilePath $lastModifiedTime.Ticks
