@@ -82,38 +82,48 @@ if ($lastModifiedTime -gt $lastKnownTime) {
 
     $sheetsToExport =@("TestImport1", "TestImport2")
 
-    $sheets = Get-ExcelSheetInfo $csvExportFilePath.FullName | Select -ExpandProperty Name
+    $sheets = Get-ExcelSheetInfo $excelFilePath | Select-Object -ExpandProperty Name
+
+    $counter = 0
 
     ForEach ($sheet in $sheets) {
 
         ForEach ($sheetNameToExport in $sheetsToExport) {
 
-            If ($sheet.Name = $sheetNameToExport) {
-                Write-Host "Debug: Processed sheet name: $sheet.Name"
+            Write-Host ("Debug: Processing worksheet: " + $sheet)
+            Write-Host ("Debug: Matching with sheet name: " + $sheetNameToExport)
+            
+            If ($sheet -eq $sheetNameToExport) {
+                Write-Host ("Debug:  - - - - - Worksheet name matched: " + $sheet)
+                $counter = $counter + 1
+            } else {
+                Write-Host "$sheet and $sheetNameToExport [NO MATCH]"
             }
         }
 
+        Write-Host "Total matches : $counter"
+
         # Build file path for csv file export with sheet name
-        $csvExportFilePath = Join-Path -Path $csvExportFolderPath -ChildPath ("$sheetName.csv")
+        #$csvExportFilePath = Join-Path -Path $csvExportFolderPath -ChildPath ("$sheetName.csv")
 
         # Read from excel file
-        $allData = Import-Excel -Path $excelFilePath 
+        #$allData = Import-Excel -Path $excelFilePath 
 
         # Check if an export csv file already exists (if so move it to Error folder and replace it)
         If (Test-Path $csvExportFilePath) {
 
             # Generate a timestamp for error file name
-            $timestamp = Get-Date -format "yyyy.MM.dd hh.mm.ss"
+        #    $timestamp = Get-Date -format "yyyy.MM.dd hh.mm.ss"
 
             # Move existing file to error folder and rename it with timestamp
-            $csvErrorFilePath = Join-Path -Path $csvErrorFolderPath -ChildPath ("Unprocessed $sheetName $timestamp.csv")
+        #    $csvErrorFilePath = Join-Path -Path $csvErrorFolderPath -ChildPath ("Unprocessed $sheetName $timestamp.csv")
 
-            Move-Item -Path $csvExportFilePath -Destination $csvErrorFilePath
+        #    Move-Item -Path $csvExportFilePath -Destination $csvErrorFilePath
 
         } 
 
         #Export to csv
-        $allData | Export-Csv -Path $csvExportFilePath -NoTypeInformation -Encoding UTF8
+        #$allData | Export-Csv -Path $csvExportFilePath -NoTypeInformation -Encoding UTF8
 
     }
 
@@ -122,7 +132,7 @@ if ($lastModifiedTime -gt $lastKnownTime) {
     ### --------- 
 
     # After all tabs are processed, update the last modification date in the text file for next run
-    Set-Content $lastTimeFilePath $lastModifiedTime.Ticks
+    #Set-Content $lastTimeFilePath $lastModifiedTime.Ticks
 
 } else {
 
