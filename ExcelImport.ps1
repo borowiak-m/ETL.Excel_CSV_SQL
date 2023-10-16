@@ -19,9 +19,9 @@
 Import-Module -Name ImportExcel
 
 # Initialize settings from file, where all business folder paths are stored
-$settingFileName = "ExcelImport_settings.txt"
-$settingsFolderPath = "D:\Scripts\"
-$settingsFilePath = Join-Path -Path $settingsFolderPath -ChildPath ($settingFileName)
+$settingFileName        = "ExcelImport_settings.txt"
+$settingsFolderPath     = "D:\Scripts\"
+$settingsFilePath       = Join-Path -Path $settingsFolderPath -ChildPath ($settingFileName)
 
 # Check for existence of the settings file
 If (-Not(Test-Path $settingsFilePath)) {Throw "No settings document found"}
@@ -40,6 +40,7 @@ $excelFilePath           = $settings['excelFilePath']
 $lastTimeFilePath        = $settings['lastTimeFilePath']
 $csvExportFolderPath     = $settings['csvExportFolderPath']
 $csvErrorFolderPath      = $settings['csvErrorFolderPath']
+$sheetsToExport          = $settings['sheetsToExport'] -split "," | ForEach-Object trim($it)
 
 # Check for the existence of excel document
 If (-Not(Test-Path $excelFilePath)) {Throw "No Excel document found"}
@@ -60,6 +61,7 @@ Write-Host "Debug: excelFilePath        = $excelFilePath        "    #Print in c
 Write-Host "Debug: lastModifiedTime     = $lastModifiedTime     "    #Print in command line
 Write-Host "Debug: csvExportFolderPath  = $csvExportFolderPath  "    #Print in command line
 Write-Host "Debug: csvErrorFolderPath   = $csvErrorFolderPath   "    #Print in command line
+Write-Host "Debug: sheetsToExport       = $sheetsToExport       "    #Print in command line
 
 if (Test-Path $lastTimeFilePath) {
 
@@ -80,59 +82,57 @@ if ($lastModifiedTime -gt $lastKnownTime) {
     # File has been modified since last check
     Write-Host "Debug: File modified since $lastKnownTime."
 
-    $sheetsToExport =@("TestImport1", "TestImport2")
-
     $sheets = Get-ExcelSheetInfo $excelFilePath | Select-Object -ExpandProperty Name
 
     $counter = 0
 
     ForEach ($sheet in $sheets) {
 
-        ForEach ($sheetNameToExport in $sheetsToExport) {
+        ForEach ($sheetToExport in $sheetsToExport) {
 
             Write-Host ("Debug: Processing worksheet: " + $sheet)
-            Write-Host ("Debug: Matching with sheet name: " + $sheetNameToExport)
+            Write-Host ("Debug: Matching with sheet name: " + $sheetToExport)
             
-            If ($sheet -eq $sheetNameToExport) {
-                Write-Host ("Debug:  - - - - - Worksheet name matched: " + $sheet)
+            If ($sheet -eq $sheetToExport) {
+                Write-Host " - - - > $sheet and $sheetToExport [MATCH]"
                 $counter = $counter + 1
+
+                # Build file path for csv file export with sheet name
+                $csvExportFilePath = Join-Path -Path $csvExportFolderPath -ChildPath ("$sheet.csv")
+
+                # Read from excel file
+                $allData = Import-Excel -Path $excelFilePath 
+
+                # Check if an export csv file already exists (if so move it to Error folder and replace it)
+                If (Test-Path $csvExportFilePath) {
+
+                    # Generate a timestamp for error file name
+                    $timestamp = Get-Date -format "yyyy.MM.dd hh.mm.ss"
+
+                    # Move existing file to error folder and rename it with timestamp
+                    $csvErrorFilePath = Join-Path -Path $csvErrorFolderPath -ChildPath ("Unprocessed $sheet $timestamp.csv")
+
+                    Move-Item -Path $csvExportFilePath -Destination $csvErrorFilePath
+
+                } 
+
+                #Export to csv
+                $allData | Export-Csv -Path $csvExportFilePath -NoTypeInformation -Encoding UTF8
+
+
             } else {
-                Write-Host "$sheet and $sheetNameToExport [NO MATCH]"
+
+                Write-Host "$sheet and $sheetToExport [NO MATCH]"
+
             }
         }
 
-        Write-Host "Total matches : $counter"
-
-        # Build file path for csv file export with sheet name
-        #$csvExportFilePath = Join-Path -Path $csvExportFolderPath -ChildPath ("$sheetName.csv")
-
-        # Read from excel file
-        #$allData = Import-Excel -Path $excelFilePath 
-
-        # Check if an export csv file already exists (if so move it to Error folder and replace it)
-        If (Test-Path $csvExportFilePath) {
-
-            # Generate a timestamp for error file name
-        #    $timestamp = Get-Date -format "yyyy.MM.dd hh.mm.ss"
-
-            # Move existing file to error folder and rename it with timestamp
-        #    $csvErrorFilePath = Join-Path -Path $csvErrorFolderPath -ChildPath ("Unprocessed $sheetName $timestamp.csv")
-
-        #    Move-Item -Path $csvExportFilePath -Destination $csvErrorFilePath
-
-        } 
-
-        #Export to csv
-        #$allData | Export-Csv -Path $csvExportFilePath -NoTypeInformation -Encoding UTF8
-
     }
 
-
-
-    ### --------- 
+    Write-Host "Total matches : $counter"
 
     # After all tabs are processed, update the last modification date in the text file for next run
-    #Set-Content $lastTimeFilePath $lastModifiedTime.Ticks
+    Set-Content $lastTimeFilePath $lastModifiedTime.Ticks
 
 } else {
 
