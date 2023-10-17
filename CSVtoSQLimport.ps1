@@ -19,52 +19,85 @@
 #
 #
 
+# Define the path of the processing settings files to monitor
+$processingSettingsFolderPath   = "D:\Scripts\ImportSettings\"
+$processingSettingsFiles        = Get-ChildItem -Path $processingSettingsFolderPath -Filter *_settings.text
 
-# Define csv file to import
-$csvFolderPath                  = "D:\Scripts\Import\"
-$csvFileName                    = "CSVimport.csv"
-$csvFilePath                    = Join-Path -Path $csvFolderPath -ChildPath ($csvFileName)
+# Define import files folder
+$importFilesFolderPath          = "D:\Scripts\Import\"
 
-# Define header variables if required to import only selected field from CSV
-$fieldsToImport                = @("ProductDepot", "Commentary")
+$overwriteMode                  = "overwrite"
+$appendMode                     = "append"
 
-# Imprt csv file
-$csvData                        = Import-Csv -Path $csvFilePath
+# Loop through each settings file
+ForEach ($settingsFile in $processingSettingsFiles) {
+    $settingsFilePath   = Join-Path -Path $processingSettingsFolderPath -ChildPath ($settingsFile.Name)
 
-# SQL Server connection
-$serverName                     = ""
-$databaseName                   = ""
-$connectionString               = "Server=$serverName;Database=$databaseName"
-$connection                     = New-Object System.Data.SqlClient.SqlConnection
-$connection.ConnectionString    = $connectionString
+    # Read the settings file and fetch params
+    $settings = @{}
 
-$connection.Open()
-
-# Check if connection was successfully open 
-# TO BE ERROR HANDLED 
-If ($connection.State -ne 'Open') {Throw "Could not establish connection to $serverName for CSV import process"}
-
-# Process rows from csv data
-ForEach ($row in $csvData) {
-    ForEach ($field in $fieldsToImport) {
-        # -----
-        #assign $row.$field to a viariable for each field
-        # -----
-        $upsertQuery = @"
-IF EXISTS (SELECT 1 FROM table_name WHERE ProductDepot = $ProductDepot)
-    UPDATE table_name 
-    SET
-    Commentary = $Commentary
-    WHERE ProductDepot = $ProductDepot
-ELSE
-    INSERT INTO table_name (ProductDepot, Commentary)
-    VALUES ( $ProductDepot, $Commentary)
-"@
-        $command = New-Object System.Data.SqlClient.SqlCommand($upsertQuery, $connection)
-        $command.ExecuteNonQuery()
+    Get-Content $settingsFilePath | ForEach-Object {
+        $key, $val      = $_ -split "="
+        $settings[$key] = $val
     }
-}
 
-#Close connection
-$connection.Close()
+    $importTable        = $settings['importTable']
+    $importTablePK      = $settings['importTablePK']
+    $importFileName     = ($settingsFile.BaseName -replace "_settings.txt", "") + ".csv"
+    $importFilePath     = Join-Path -Path $importFilesFolderPath -ChildPath ($importFileName)
+    $importFieldNames   = $settings['fieldNames']
+    $importMode         = $settings['importMode']
+    $importServerName   = $settings['importServerName']
+    $importDatabaseName = $settings['importDatabaseName']
+
+    # SQL Server connection
+    $connectionString               = "Server=$importServerName;Database=$importDatabaseName"
+    $connection                     = New-Object System.Data.SqlClient.SqlConnection
+    $connection.ConnectionString    = $connectionString
+
+    $connection.Open()
+
+    # Check if connection was successfully open 
+    # TO BE ERROR HANDLED 
+    If ($connection.State -ne 'Open') {Throw "Could not establish connection to $serverName for CSV import process"}
+
+    # If import mode is overwrite
+    #   Clear import table before import
+    If ($importMode -eq $overwriteMode) {
+        $truncateCommand             = $connection.CreateCommand()
+        $truncateCommand.CommandText = "TRUNCATE TABLE $importTable"
+        $truncateCommand.ExecuteNonQuery()
+    }
+
+    # Imprt csv file
+    $importFileData                 = Import-Csv -Path $importFilePath
+
+    # Process rows from csv data
+    ForEach ($row in $importFileData) {
+
+        $values     = @($importFieldNames.Split(',').ForEach({ $row.$_ }) -join "','")
+
+        # If update flag is append
+        If ($importMode -eq $appendMode) {
+            # upsert query
+            $sqlQuery = "IF EXISTS (SELECT $mportTablePK FROM $importTable WHERE $importTablePK = '$($row.$importTablePK)')
+                            UPDATE $importTable
+                            SET $fieldNames = $values
+                        ELSE
+                            INSERT INTO $importTable ($fieldNames) VALUES ('$values')"
+        } else {
+            # simple insert query
+            $sqlQuery = "INSERT INTO $importTable ($fieldNames) VALUES ('$values')"
+        }
+
+        $command                        = $connection.CreateCommand()
+        $command.CommandText            = $sqlQuery 
+        $command.ExecuteNonQuery()
+
+    }
+
+    #Close connection
+    $connection.Close()
+
+}
 
