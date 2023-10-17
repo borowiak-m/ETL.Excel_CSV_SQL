@@ -18,6 +18,10 @@ $connection.ConnectionString    = $connectionString
 
 $connection.Open()
 
+# Check if connection was successfully open 
+# TO BE ERROR HANDLED 
+If ($connection.State -ne 'Open') {Throw "Could not establish connection to $serverName for CSV import process"}
+
 # Process rows from csv data
 ForEach ($row in $csvData) {
     ForEach ($field in $fieldsToImport) {
