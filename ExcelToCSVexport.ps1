@@ -48,7 +48,6 @@ function Write-Error($errorFolderPath, $errorMsg, $errorLvl) {
         Write-Host "Debug: Error of level $errorLvl. Recommencing program."
     }
 
-
 }
 
 # Initialize settings from file, where all business folder paths are stored
@@ -80,6 +79,7 @@ $sheetsToExport          = $settings['sheetsToExport'] -split "," | ForEach-Obje
 
 $paramsToCheck = @($excelFilePath, $lastTimeFilePath, $csvExportFolderPath, $sheetsToExport)
 
+# Check for empty params 
 ForEach ($param in $paramsToCheck) { If ([string]::IsNullOrEmpty($param)) { Write-Error $errorFolderPath "Params missing. Review settings file under $settingsFilePath" Fatal} }
 
 # Check for the existence of excel document
@@ -110,6 +110,7 @@ if ($lastModifiedTime -gt $lastKnownTime) {
     # File has been modified since last check
     Write-Host "Debug: File modified since $lastKnownTime."
 
+    # Get all workshet names from the Excel document to be extracted
     $sheets = Get-ExcelSheetInfo $excelFilePath | Select-Object -ExpandProperty Name
 
     $matchCounter = 0
@@ -121,7 +122,9 @@ if ($lastModifiedTime -gt $lastKnownTime) {
             Write-Host ("Debug: Processing worksheet: " + $sheet)
             Write-Host ("Debug: Matching with sheet name: " + $sheetToExport)
             
+            # If worksheet name matches a sheet name to be extracted
             If ($sheet -eq $sheetToExport) {
+                
                 Write-Host "Debug:  - - - > $sheet and $sheetToExport [MATCH]"
                 $matchCounter = $matchCounter + 1
 
@@ -129,7 +132,7 @@ if ($lastModifiedTime -gt $lastKnownTime) {
                 $csvExportFilePath = Join-Path -Path $csvExportFolderPath -ChildPath ("$sheet.csv")
 
                 # Read from excel file
-                $allData = Import-Excel -Path $excelFilePath 
+                $allData = Import-Excel -Path $excelFilePath -WorksheetName $sheet
 
                 # Check if an export csv file already exists (if so move it to Error folder and replace it)
                 If (Test-Path $csvExportFilePath) {
