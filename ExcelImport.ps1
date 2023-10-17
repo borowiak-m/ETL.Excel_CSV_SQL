@@ -57,7 +57,6 @@ Get-Content $settingsFilePath | ForEach-Object {
 $excelFilePath           = $settings['excelFilePath']
 $lastTimeFilePath        = $settings['lastTimeFilePath']
 $csvExportFolderPath     = $settings['csvExportFolderPath']
-$errorFolderPath         = $settings['errorFolderPath']
 $sheetsToExport          = $settings['sheetsToExport'] -split "," | ForEach-Object trim($it)
 
 $paramsToCheck = @($excelFilePath, $lastTimeFilePath, $csvExportFolderPath, $sheetsToExport)
