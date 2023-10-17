@@ -1,17 +1,19 @@
 #  LOGIC EXPLAINED
 # ---------------
-# This script aims to export data in an Excel file. We achieve this following this logic:
+# This script aims to export data in an Excel file to csv files, one per worksheet. We achieve this following this logic:
+#
+# - Read process params from a settings text file, like folder locations and file names.
 #
 # - Check when was the file last written to, if there are new changes. Then compare last modified date and time to a stored
 #   value of date and time of the last data extract. Should the modification time be more recent, this triggers a new export.
 #
 # - Load the excel file and export all data from a given sheet name. This will be exported into a csv file, but first we need 
-#   to check if the previously exported csv file is still in the export folder. This file is to be picked up by another process.
-#   If the previous export is still sat in the folder, we move it to an Error folder and replace it with a new export instead.
+#   to check if the previously exported csv files are still in the export folder. These files is to be picked up by another process.
+#   If the previous export is still sat in the folder, we move it to an Error folder and replace it with a new export instead and log the error.
 #
 # To be continued:
 # ----------------
-# - How to notify users that there was a csv file left behind from previous cycle
+# - CSV inmport into SQL tables script to pick up the exports
 # - Potential housekeeping of old files in Error folder
 # - potential clashes with excel sheet being edited at the same time or if open
 
@@ -40,10 +42,10 @@ function Write-Error($errorFolderPath, $errorMsg, $errorLvl) {
     }
 
     If ($errorLvl -eq "Fatal") {
-        Write-Host "Debug: Fatal error, exiting program"
+        Write-Host "Debug: Fatal error, exiting program."
         Exit
     } else {
-        Write-Host "Debug: Error of level " $errorLvl ". Recommencing program."
+        Write-Host "Debug: Error of level $errorLvl. Recommencing program."
     }
 
 
@@ -78,15 +80,7 @@ $sheetsToExport          = $settings['sheetsToExport'] -split "," | ForEach-Obje
 
 $paramsToCheck = @($excelFilePath, $lastTimeFilePath, $csvExportFolderPath, $sheetsToExport)
 
-ForEach ($param in $paramsToCheck) {
-
-    Write-Host "Debug: param read from settings file: " $param
-
-    If ([string]::IsNullOrEmpty($param)) {
-        $errorMsg = "Params missing. Review settings file under $settingsFilePath"
-        Write-Error $errorFolderPath $errorMsg Fatal
-    }
-}
+ForEach ($param in $paramsToCheck) { If ([string]::IsNullOrEmpty($param)) { Write-Error $errorFolderPath "Params missing. Review settings file under $settingsFilePath" Fatal} }
 
 # Check for the existence of excel document
 If (-Not(Test-Path $excelFilePath)) {Write-Error $errorFolderPath "No document found under $excelFilePath" Fatal}
@@ -141,14 +135,13 @@ if ($lastModifiedTime -gt $lastKnownTime) {
                 If (Test-Path $csvExportFilePath) {
 
                     # Log unprocessed file
-                    Write-Error $errorFolderPath "Unprocessed file $csvExportFilePath. File renamed and moved to $errorFolder." NotFatal
+                    Write-Error $errorFolderPath "Unprocessed file $csvExportFilePath. File renamed and moved to $errorFolderPath." NotFatal
 
                     # Generate a timestamp for error file name
                     $timestamp = Get-Date -format "yyyy.MM.dd hh.mm.ss"
 
-                    # Move existing file to error folder and rename it with timestamp
+                    # Move existing file to error folder and rename it with a timestamp
                     $csvErrorFilePath = Join-Path -Path $errorFolderPath -ChildPath ("Unprocessed $sheet $timestamp.csv")
-
                     Move-Item -Path $csvExportFilePath -Destination $csvErrorFilePath
 
                 } 
