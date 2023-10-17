@@ -18,21 +18,34 @@
 # Import the ImportExcel module
 Import-Module -Name ImportExcel
 
-function Write-Error($errorFolderPath, $errorMsg, $riskLvl) {
+function Write-Error($errorFolderPath, $errorMsg, $errorLvl) {
 
-    Write-Host $errorMsg
-    Write-Host $errorFolderPath
+    # Log error in cmd
+    Write-Host $errorMsg                            
 
     # Generate a timestamp for error file name
     $timestamp = Get-Date -format "yyyy.MM.dd hh.mm.ss"
 
+    # Generate a date for error file name
+    $errorDate = Get-Date -format "yyyyMMdd"
+
     # Generate a unique error file path
-    $errorLogFilePath = Join-Path -Path $errorFolderPath -ChildPath("FileImportError $timestamp.txt")
+    $errorLogFilePath = Join-Path -Path $errorFolderPath -ChildPath("$errorDate FileImportError.txt")
 
-    # Write error message to a file
-    Set-Content $errorLogFilePath $errorMsg
+    # Check if file already exists, if so append the error message to existing file, if not create a new error file
+    If (Test-Path $errorLogFilePath) {
+        Add-Content $errorLogFilePath "$timestamp $errorMsg"
+    } else {
+        Set-Content $errorLogFilePath "$timestamp $errorMsg"
+    }
 
-    If ($riskLvl -eq "Fatal") {Exit}
+    If ($errorLvl -eq "Fatal") {
+        Write-Host "Debug: Fatal error, exiting program"
+        Exit
+    } else {
+        Write-Host "Debug: Error of level " $errorLvl ". Recommencing program."
+    }
+
 
 }
 
@@ -40,6 +53,10 @@ function Write-Error($errorFolderPath, $errorMsg, $riskLvl) {
 $settingFileName        = "ExcelImport_settings.txt"
 $settingsFolderPath     = "D:\Scripts\"
 $settingsFilePath       = Join-Path -Path $settingsFolderPath -ChildPath ($settingFileName)
+
+# Initialize default folder locations
+$errorFolderPath        = "D:\Scripts\ExcelImport_Error\"
+If (-Not (Test-Path $errorFolderPath)) {New-Item -Path $errorFolderPath -ItemType Directory}
 
 # Check for existence of the settings file
 If (-Not(Test-Path $settingsFilePath)) {Throw "No settings document found"}
@@ -62,42 +79,25 @@ $sheetsToExport          = $settings['sheetsToExport'] -split "," | ForEach-Obje
 $paramsToCheck = @($excelFilePath, $lastTimeFilePath, $csvExportFolderPath, $sheetsToExport)
 
 ForEach ($param in $paramsToCheck) {
-    
-    $paramLength = $param | Measure-Object -Character | Select-Object -expand Characters
 
-    Write-Host $param "Length : " $paramLength
+    Write-Host "Debug: param read from settings file: " $param
 
-    If ($paramLength -eq 0) {Throw "Params missing. Review settings file under $settingsFilePath"} 
+    If ([string]::IsNullOrEmpty($param)) {
+        $errorMsg = "Params missing. Review settings file under $settingsFilePath"
+        Write-Error $errorFolderPath $errorMsg Fatal
+    }
 }
 
 # Check for the existence of excel document
-If (-Not(Test-Path $excelFilePath)) {Write-Error $errorFolderPath "No document found under $excelFilePath" "Fatal"}
+If (-Not(Test-Path $excelFilePath)) {Write-Error $errorFolderPath "No document found under $excelFilePath" Fatal}
 
-# Check if necessary folders exist, if not create them
-$foldersToCheck = @($csvExportFolderPath, $csvErrorFolderPath)
-
-ForEach ($folder in $foldersToCheck) {
-    If (-Not (Test-Path $folder)){
-        Write-Error $errorFolderPath "Folder $folder not found. Created a new directory." "Continue"
-        New-Item -Path $folder -ItemType Directory
-    }
-}
+# Check for existence of csv export folder
+If (-Not (Test-Path $csvExportFolderPath)) {New-Item -Path $csvExportFolderPath -ItemType Directory}
 
 # Fetch last edit time of the excel document
 $lastModifiedTime = (Get-Item $excelFilePath).LastWriteTime
 
-Write-Host "Debug: excelFilePath                = $excelFilePath"
-Write-Host "Debug: excelFilePath.Length         = " ($excelFilePath | Measure-Object -Character | Select-Object -expand Characters)
-Write-Host "Debug: lastModifiedTime             = $lastModifiedTime"
-Write-Host "Debug: lastModifiedTime.Length      = " ($lastModifiedTime | Measure-Object -Character | Select-Object -expand Characters)
-Write-Host "Debug: csvExportFolderPath          = $csvExportFolderPath"
-Write-Host "Debug: csvExportFolderPath.Length   = " ($csvExportFolderPath | Measure-Object -Character | Select-Object -expand Characters)
-Write-Host "Debug: errorFolderPath              = $errorFolderPath"
-Write-Host "Debug: errorFolderPath.Length       = " ($errorFolderPath | Measure-Object -Character | Select-Object -expand Characters)
-Write-Host "Debug: sheetsToExport               = $sheetsToExport"
-Write-Host "Debug: sheetsToExport.Length        = " ($sheetsToExport | Measure-Object -Character | Select-Object -expand Characters)
-
-if (Test-Path $lastTimeFilePath) {
+If (Test-Path $lastTimeFilePath) {
 
     # If file exists get the last modified datetime
     $lastKnownTime = New-Object DateTime (Get-Content $lastTimeFilePath)
@@ -141,7 +141,7 @@ if ($lastModifiedTime -gt $lastKnownTime) {
                 If (Test-Path $csvExportFilePath) {
 
                     # Log unprocessed file
-                    Write-Error $errorFolderPath "Unprocessed file $csvExportFilePath. File renamed and moved to $errorFolder." "Continue"
+                    Write-Error $errorFolderPath "Unprocessed file $csvExportFilePath. File renamed and moved to $errorFolder." NotFatal
 
                     # Generate a timestamp for error file name
                     $timestamp = Get-Date -format "yyyy.MM.dd hh.mm.ss"
