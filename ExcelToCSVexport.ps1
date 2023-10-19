@@ -51,14 +51,14 @@ function Write-Error($errorFolderPath, $errorMsg, $errorLvl) {
 }
 
 # Initialize settings params
-$settingFileName        = "ExcelImport_settings.txt"
-$settingsFolderPath     = "D:\Scripts\Stock Blackboard\Settings\"
+$settingFileName        = "Extract_settings.txt"
+$settingsFolderPath     = "D:\Scripts\Stock Blackboard\ExtractSettings\"
 $settingsFilePath       = Join-Path -Path $settingsFolderPath -ChildPath ($settingFileName)
 
 $lastModLogFileName     = "last_time_modified.txt"
 
 # Initialize default error folder locations
-$errorFolderPath        = "D:\Scripts\Stock Blackboard\Import_Error\"
+$errorFolderPath        = "D:\Scripts\Stock Blackboard\Error\"
 If (-Not (Test-Path $errorFolderPath)) {New-Item -Path $errorFolderPath -ItemType Directory}
 
 # Check for existence of the settings file
