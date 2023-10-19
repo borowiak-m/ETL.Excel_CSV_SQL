@@ -103,7 +103,7 @@ ForEach ($settingsFile in $processingSettingsFiles) {
 
     $importTable        = $settings['importTable']
     $importTablePK      = $settings['importTablePK']
-    $importFieldNames   = $settings['fieldNames']
+    $importFieldNames   = $settings['importFieldNames']
     $importMode         = $settings['importMode']
     $importServerName   = $settings['importServerName']
     $importDatabaseName = $settings['importDatabaseName']
@@ -112,8 +112,9 @@ ForEach ($settingsFile in $processingSettingsFiles) {
     $importFilePath     = Join-Path -Path $importFilesFolderPath -ChildPath ($importFileName)
 
     # Check for empty params 
+    $hasEmptyParams = $false
     $paramsToCheck           = @($importTable, $importTablePK, $importFieldNames, $importMode, $importServerName, $importDatabaseName)
-    ForEach ($param in $paramsToCheck) { If ([string]::IsNullOrEmpty($param)) { $hasEmptyParams = true } }
+    ForEach ($param in $paramsToCheck) { If ([string]::IsNullOrEmpty($param)) { $hasEmptyParams = $true } }
 
     If ($hasEmptyParams){ 
         Write-Error $errorFolderPath "Params missing. File $importFileName is skipped from extract process. Review settings file under $settingsFilePath." NotFatal
@@ -146,24 +147,26 @@ ForEach ($settingsFile in $processingSettingsFiles) {
     ForEach ($row in $importFileData) {
 
         $values     = @($importFieldNames.Split(',').ForEach({ $row.$_ }) -join "','")
+        $updates    = ($importFieldNames -split "," | ForEach-Object {"$_ = '$($row.$_)'"}) -join ","
 
         # If update flag is append
         If ($importMode -eq $appendMode) {
             # upsert query
-            $sqlQuery = "IF EXISTS (SELECT $mportTablePK FROM $importTable WHERE $importTablePK = '$($row.$importTablePK)')
+            $sqlQuery = "IF EXISTS (SELECT $importTablePK FROM $importTable WHERE $importTablePK = '$($row.$importTablePK)')
                             UPDATE $importTable
-                            SET $fieldNames = $values
+                            SET $updates
+                            WHERE $importTablePK = '$($row.$importTablePK)'
                         ELSE
-                            INSERT INTO $importTable ($fieldNames) VALUES ('$values')"
+                            INSERT INTO $importTable ($importFieldNames) VALUES ('$values')"
         } else {
             # simple insert query
-            $sqlQuery = "INSERT INTO $importTable ($fieldNames) VALUES ('$values')"
+            $sqlQuery = "INSERT INTO $importTable ($importFieldNames) VALUES ('$values')"
         }
 
         $command                        = $connection.CreateCommand()
         $command.CommandText            = $sqlQuery 
         $command.ExecuteNonQuery()
-
+        #Write-Host $sqlQuery
     }
 
     #Close connection
@@ -171,7 +174,7 @@ ForEach ($settingsFile in $processingSettingsFiles) {
 
     # Log update
     $lastImpLogFilePath = Join-Path -Path $lastImpLogFolderPath -ChildPath ($importFileName + "_" + $lastImpLogFileName)
-    Set-Content $lastImpLogFilePath (Get-Date).Ticks
+    Set-Content $lastImpLogFilePath (Get-Date)
 
 }
 
