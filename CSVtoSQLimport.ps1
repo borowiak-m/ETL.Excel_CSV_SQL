@@ -19,6 +19,36 @@
 #
 #
 
+function Write-Error($errorFolderPath, $errorMsg, $errorLvl) {
+
+    # Log error in cmd
+    Write-Host $errorMsg                            
+
+    # Generate a timestamp for error file name
+    $timestamp = Get-Date -format "yyyy.MM.dd hh.mm.ss"
+
+    # Generate a date for error file name
+    $errorDate = Get-Date -format "yyyyMMdd"
+
+    # Generate a unique error file path
+    $errorLogFilePath = Join-Path -Path $errorFolderPath -ChildPath("$errorDate FileImportError.txt")
+
+    # Check if file already exists, if so append the error message to existing file, if not create a new error file
+    If (Test-Path $errorLogFilePath) {
+        Add-Content $errorLogFilePath "$timestamp $errorMsg"
+    } else {
+        Set-Content $errorLogFilePath "$timestamp $errorMsg"
+    }
+
+    If ($errorLvl -eq "Fatal") {
+        Write-Host "Debug: Fatal error, exiting program."
+        Exit
+    } else {
+        Write-Host "Debug: Error of level $errorLvl. Recommencing program."
+    }
+
+}
+
 # Initialize default error folder locations and file names
 $processingSettingsFolderPath   = "D:\Scripts\Stock Blackboards\Settings\"
 $processingSettingsFiles        = Get-ChildItem -Path $processingSettingsFolderPath -Filter *_import_settings.txt
