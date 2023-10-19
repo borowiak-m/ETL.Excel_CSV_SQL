@@ -20,11 +20,11 @@
 #
 
 # Define the path of the processing settings files to monitor
-$processingSettingsFolderPath   = "D:\Scripts\ImportSettings\"
+$processingSettingsFolderPath   = "D:\Scripts\Stock Blackboards\SQLimportSettings\"
 $processingSettingsFiles        = Get-ChildItem -Path $processingSettingsFolderPath -Filter *_settings.text
 
 # Define import files folder
-$importFilesFolderPath          = "D:\Scripts\Import\"
+$importFilesFolderPath          = "D:\Scripts\Stock Blackboards\Processed\"
 
 $overwriteMode                  = "overwrite"
 $appendMode                     = "append"
