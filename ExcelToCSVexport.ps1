@@ -52,7 +52,7 @@ function Write-Error($errorFolderPath, $errorMsg, $errorLvl) {
 
 # Initialize settings params
 $settingFileName        = "Extract_settings.txt"
-$settingsFolderPath     = "D:\Scripts\Stock Blackboard\ExtractSettings\"
+$settingsFolderPath     = "D:\Scripts\Stock Blackboard\Settings\"
 $settingsFilePath       = Join-Path -Path $settingsFolderPath -ChildPath ($settingFileName)
 
 $lastModLogFileName     = "last_time_modified.txt"
