@@ -50,7 +50,7 @@ function Write-Error($errorFolderPath, $errorMsg, $errorLvl) {
 }
 
 # Initialize default error folder locations and file names
-$processingSettingsFolderPath   = "D:\Scripts\Stock Blackboards\Settings\"
+$processingSettingsFolderPath   = "D:\Scripts\Stock Blackboard\Settings\"
 $processingSettingsFiles        = Get-ChildItem -Path $processingSettingsFolderPath -Filter *_import_settings.txt
 $errorFolderPath                = "D:\Scripts\Stock Blackboard\Error\"
 $lastImpLogFileName             = "last_time_imported.txt"
