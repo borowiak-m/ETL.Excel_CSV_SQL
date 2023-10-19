@@ -5,7 +5,7 @@
 # - Read process params from a settings text file, like folder locations and file names.
 #
 # - Check when was the file last written to, if there are new changes. Then compare last modified date and time to a stored
-#   value of date and time of the last data extract. Should the modification time be more recent, this triggers a new export.
+#   value of date and time of the last data export. Should the modification time be more recent, this triggers a new export.
 #
 # - Load the excel file and export all data from a given sheet name. This will be exported into a csv file, but first we need 
 #   to check if the previously exported csv files are still in the export folder. These files is to be picked up by another process.
@@ -50,81 +50,90 @@ function Write-Error($errorFolderPath, $errorMsg, $errorLvl) {
 
 }
 
-# Extract settings files are all post-fixed with "_extract_settings". They are divided into two groups:
-#   - one is prefixed with "main": this should be a single file cantaining settings for the extract process 
-#     that apply to all extracted data (example filename main_extract_settings.txt)
-#   - another one is prefixed with "filename" which is going to correspond with an Exel filename for extraction process: there will be as many files of this type
-#     as many files there are to process, each containing specific params for the file, like it's path, and sheets to extract (file name: Stockboard_extract_settings.txt)
+# Export settings files are all post-fixed with "_export_settings". They are divided into two groups:
+#   - one is prefixed with "main": this should be a single file cantaining settings for the export process 
+#     that apply to all exported data (example filename main_export_settings.txt)
+#   - another one is prefixed with "filename" which is going to correspond with an Exel filename for exportion process: there will be as many files of this type
+#     as many files there are to process, each containing specific params for the file, like it's path, and sheets to export (file name: Stockboard_export_settings.txt)
 
 # Initialize default error folder locations and file names
-$processingSettingsFolderPath   = "D:\Scripts\Stock Blackboards\Settings\"
-$processingSettingsFiles        = Get-ChildItem -Path $processingSettingsFolderPath -Filter *_extract_settings.txt
+$processingSettingsFolderPath   = "D:\Scripts\Stock Blackboard\Settings\"
+$processingSettingsFiles        = Get-ChildItem -Path $processingSettingsFolderPath -Filter *_export_settings.txt
 $errorFolderPath                = "D:\Scripts\Stock Blackboard\Error\"
 $lastModLogFileName             = "last_time_modified.txt"
-$mainExtractSettingsFileName    = "extract_settings.txt"
-$mainExtractSettingsFilePath    = Join-Path -Path $processingSettingsFolderPath -ChildPath ($mainExtractSettingsFileName)
+$mainExportSettingsFileName     = "export_settings.txt"
+$mainExportSettingsFilePath     = Join-Path -Path $processingSettingsFolderPath -ChildPath ($mainexportSettingsFileName)
 
-# Check for existence of the main extract settings file
-If (-Not(Test-Path $mainExtractSettingsFilePath)) {Throw "No main extract settings document found."}
+# Check for existence of the main export settings file
+If (-Not(Test-Path $mainexportSettingsFilePath)) {Throw "No main export settings document found."}
 
 # Check for existence of error folder
 If (-Not (Test-Path $errorFolderPath)) {New-Item -Path $errorFolderPath -ItemType Directory}
 
-# Get params from main extract settings file
-$extractSettings = @{}
+# Get params from main export settings file
+$exportSettings = @{}
 
 # Get variablename=filepath strings per each line, split by "=" and store in $settings dict
-Get-Content $mainExtractSettingsFilePath | ForEach-Object {
+Get-Content $mainexportSettingsFilePath | ForEach-Object {
     $key, $val      = $_ -split "="
-    $extractSettings[$key] = $val
+    $exportSettings[$key] = $val
 }
 
 # Initialize settings from file, where all business folder paths are stored
-$lastModLogFolderPath    = $extractSettings['lastModLogFolderPath']
-$csvExportFolderPath     = $extractSettings['csvExportFolderPath']
+$lastModLogFolderPath    = $exportSettings['lastModLogFolderPath']
+$csvExportFolderPath     = $exportSettings['csvExportFolderPath']
 
 $paramsToCheck = @($lastModLogFolderPath, $csvExportFolderPath)
 
 # Check for empty params 
-ForEach ($param in $paramsToCheck) { If ([string]::IsNullOrEmpty($param)) { Write-Error $errorFolderPath "Params missing. Review settings file under $mainExtractSettingsFilePath" Fatal} }
+ForEach ($param in $paramsToCheck) { If ([string]::IsNullOrEmpty($param)) { Write-Error $errorFolderPath "Params missing. Review settings file under $mainExportSettingsFilePath" Fatal} }
 
 # Check for existence of time modified log folder and csv export folder
 If (-Not (Test-Path $lastModLogFolderPath)) {New-Item -Path $lastModLogFolderPath -ItemType Directory}
 If (-Not (Test-Path $csvExportFolderPath)) {New-Item -Path $csvExportFolderPath -ItemType Directory}
 
 
-# Process extract files from extract file settings
+# Process export files from export file settings
 ForEach ($settingsFile in $processingSettingsFiles) {
 
     # Read the settings file and fetch params
-    $settings = @{}
+    $exportSettings = @{}
 
     Get-Content $settingsFile.FullName | ForEach-Object {
         $key, $val      = $_ -split "="
-        $settings[$key] = $val
+        $exportSettings[$key] = $val
     }
 
     # Initialize settings from file, where all business folder paths are stored
-    $exportFileExtention     = $settings['exportFileExtention']
-    $exportSourceFolderPath  = $settings['exportSourceFolderPath']
-    $sheetsToExport          = $settings['sheetsToExport'] -split "," | ForEach-Object trim($it)
+    $exportFileExtention     = $exportSettings['exportFileExtention']
+    $exportSourceFolderPath  = $exportSettings['exportSourceFolderPath']
+    $sheetsToExport          = $exportSettings['sheetsToExport'] -split "," | ForEach-Object trim($it)
 
     $exportFileBaseName      = ($settingsFile.BaseName -replace "_export_settings", "")
     $exportFileName          = ($settingsFile.BaseName -replace "_export_settings", "") + $exportFileExtention
     $exportFilePath          = Join-Path -Path $exportSourceFolderPath -ChildPath ($exportFileName)
 
+    Write-Host "Debug: processing file : $settingsFile"
+    Write-Host "Debug: processing param exportFileExtention : $exportFileExtention" 
+    Write-Host "Debug: processing param exportSourceFolderPath : $exportSourceFolderPath"
+    Write-Host "Debug: processing param sheetsToExport : $sheetsToExport"
+    Write-Host "Debug: processing param exportFileBaseName : $exportFileBaseName"
+    Write-Host "Debug: processing param exportFileName  : $exportFileName"
+    Write-Host "Debug: processing param exportFilePath : $exportFilePath "
+
     # Check for empty params 
-    $paramsToCheck           = @($exportFileExtention,$exportSourceFolderPath ,$sheetsToExport)
-    ForEach ($param in $paramsToCheck) { If ([string]::IsNullOrEmpty($param)) { $hasEmptyParams = true } }
+    $hasEmptyParams = $false
+    $paramsToCheck           = @($exportFileExtention, $exportSourceFolderPath, $sheetsToExport)
+    ForEach ($param in $paramsToCheck) { If ([string]::IsNullOrEmpty($param)) { $hasEmptyParams = $true } }
 
     If ($hasEmptyParams){ 
-        Write-Error $errorFolderPath "Params missing. File $exportFileBaseName is skipped from extract process. Review settings file under $settingsFilePath" NotFatal
+        Write-Error $errorFolderPath "Params missing. File $exportFileBaseName is skipped from export process. Review settings file under $settingsFile" NotFatal
         Continue
     }
 
-    # Check for the existence of extract document
+    # Check for the existence of export document
     If (-Not(Test-Path $exportFilePath)) {  
-        Write-Error $errorFolderPath "File missing. File $exportFilePath is skipped from extract process. Review settings file under $settingsFilePath" NotFatal
+        Write-Error $errorFolderPath "File missing. File $exportFilePath is skipped from export process. Review settings file under $settingsFile" NotFatal
         Continue
     }
 
@@ -156,7 +165,7 @@ ForEach ($settingsFile in $processingSettingsFiles) {
         # File has been modified since last check
         Write-Host "Debug: File modified since $lastKnownTime."
 
-        # Get all workshet names from the Excel document to be extracted
+        # Get all workshet names from the Excel document to be exported
         $sheets = Get-ExcelSheetInfo $exportFilePath | Select-Object -ExpandProperty Name
 
         $matchCounter = 0
@@ -168,7 +177,7 @@ ForEach ($settingsFile in $processingSettingsFiles) {
                 Write-Host ("Debug: Processing worksheet: " + $sheet)
                 Write-Host ("Debug: Matching with sheet name: " + $sheetToExport)
                 
-                # If worksheet name matches a sheet name to be extracted
+                # If worksheet name matches a sheet name to be exported
                 If ($sheet -eq $sheetToExport) {
                     
                     Write-Host "Debug:  - - - > $sheet and $sheetToExport [MATCH]"
@@ -211,7 +220,7 @@ ForEach ($settingsFile in $processingSettingsFiles) {
         Write-Host "Debug: Total matches : $matchCounter"
 
         # After all tabs are processed, update the last modification date in the text file for next run
-        Set-Content $lastModLogFilePath $lastModifiedTime.Ticks
+        If ($matchCounter -gt 0) { Set-Content $lastModLogFilePath $lastModifiedTime.Ticks }
 
     } else {
 
