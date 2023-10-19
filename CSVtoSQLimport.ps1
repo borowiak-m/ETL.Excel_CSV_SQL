@@ -19,18 +19,48 @@
 #
 #
 
-# Define the path of the processing settings files to monitor
-$processingSettingsFolderPath   = "D:\Scripts\Stock Blackboards\SQLimportSettings\"
-$processingSettingsFiles        = Get-ChildItem -Path $processingSettingsFolderPath -Filter *_settings.text
+# Initialize default error folder locations and file names
+$processingSettingsFolderPath   = "D:\Scripts\Stock Blackboards\Settings\"
+$processingSettingsFiles        = Get-ChildItem -Path $processingSettingsFolderPath -Filter *_import_settings.txt
+$errorFolderPath                = "D:\Scripts\Stock Blackboard\Error\"
+$lastImpLogFileName             = "last_time_imported.txt"
+$mainImportSettingsFileName     = "import_settings.txt"
+$mainImportSettingsFilePath     = Join-Path -Path $processingSettingsFolderPath -ChildPath ($mainImportSettingsFileName)
 
-# Define import files folder
-$importFilesFolderPath          = "D:\Scripts\Stock Blackboards\Processed\"
+# Check for existence of the main extract settings file
+If (-Not(Test-Path $mainImportSettingsFilePath)) {Throw "No main import settings document found."}
 
-$overwriteMode                  = "overwrite"
-$appendMode                     = "append"
+# Check for existence of error folder
+If (-Not (Test-Path $errorFolderPath)) {New-Item -Path $errorFolderPath -ItemType Directory}
+
+# Get params from main extract settings file
+$importSettings = @{}
+
+# Get variablename=filepath strings per each line, split by "=" and store in $settings dict
+Get-Content $mainImportSettingsFilePath | ForEach-Object {
+    $key, $val      = $_ -split "="
+    $importSettings[$key] = $val
+}
+
+# Initialize settings from file, where all business folder paths are stored
+$lastImpLogFolderPath       = $importSettings['lastImpLogFolderPath']
+$importFilesFolderPath      = $importSettings['importFilesFolderPath']
+$overwriteMode              = $importSettings['overwriteMode']
+$appendMode                 = $importSettings['appendMode']
+
+$paramsToCheck = @($lastImpLogFolderPath, $importFilesFolderPath, $overwriteMode, $appendMode)
+
+# Check for empty params 
+ForEach ($param in $paramsToCheck) { If ([string]::IsNullOrEmpty($param)) { Write-Error $errorFolderPath "Params missing. Review settings file under $mainImportSettingsFilePath" Fatal} }
+
+# Check for existence of last time imported log folder and the import folder
+If (-Not (Test-Path $importFilesFolderPath)) {Write-Error $errorFolderPath "Import folder missing. Review settings file under $mainImportSettingsFilePath" Fatal}
+If (-Not (Test-Path $lastImpLogFolderPath)) {New-Item -Path $lastImpLogFolderPath -ItemType Directory}
 
 # Loop through each settings file
 ForEach ($settingsFile in $processingSettingsFiles) {
+
+    # Build current settings file path
     $settingsFilePath   = Join-Path -Path $processingSettingsFolderPath -ChildPath ($settingsFile.Name)
 
     # Read the settings file and fetch params
@@ -43,12 +73,22 @@ ForEach ($settingsFile in $processingSettingsFiles) {
 
     $importTable        = $settings['importTable']
     $importTablePK      = $settings['importTablePK']
-    $importFileName     = ($settingsFile.BaseName -replace "_settings.txt", "") + ".csv"
-    $importFilePath     = Join-Path -Path $importFilesFolderPath -ChildPath ($importFileName)
     $importFieldNames   = $settings['fieldNames']
     $importMode         = $settings['importMode']
     $importServerName   = $settings['importServerName']
     $importDatabaseName = $settings['importDatabaseName']
+
+    $importFileName     = ($settingsFile.BaseName -replace "_import_settings", "") + ".csv"
+    $importFilePath     = Join-Path -Path $importFilesFolderPath -ChildPath ($importFileName)
+
+    # Check for empty params 
+    $paramsToCheck           = @($importTable, $importTablePK, $importFieldNames, $importMode, $importServerName, $importDatabaseName)
+    ForEach ($param in $paramsToCheck) { If ([string]::IsNullOrEmpty($param)) { $hasEmptyParams = true } }
+
+    If ($hasEmptyParams){ 
+        Write-Error $errorFolderPath "Params missing. File $importFileName is skipped from extract process. Review settings file under $settingsFilePath." NotFatal
+        Continue
+    }
 
     # SQL Server connection
     $connectionString               = "Server=$importServerName;Database=$importDatabaseName"
@@ -59,7 +99,7 @@ ForEach ($settingsFile in $processingSettingsFiles) {
 
     # Check if connection was successfully open 
     # TO BE ERROR HANDLED 
-    If ($connection.State -ne 'Open') {Throw "Could not establish connection to $serverName for CSV import process"}
+    If ($connection.State -ne 'Open') {Throw "Could not establish connection to $importServerName for CSV import process for file $importFilePath."}
 
     # If import mode is overwrite
     #   Clear import table before import
@@ -98,6 +138,9 @@ ForEach ($settingsFile in $processingSettingsFiles) {
 
     #Close connection
     $connection.Close()
+
+    # Log update
+    Set-Content $lastImpLogFilePath (Get-Date).Ticks
 
 }
 
