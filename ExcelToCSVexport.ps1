@@ -50,13 +50,15 @@ function Write-Error($errorFolderPath, $errorMsg, $errorLvl) {
 
 }
 
-# Initialize settings from file, where all business folder paths are stored
+# Initialize settings params
 $settingFileName        = "ExcelImport_settings.txt"
-$settingsFolderPath     = "D:\Scripts\"
+$settingsFolderPath     = "D:\Scripts\Stock Blackboard\Settings\"
 $settingsFilePath       = Join-Path -Path $settingsFolderPath -ChildPath ($settingFileName)
 
-# Initialize default folder locations
-$errorFolderPath        = "D:\Scripts\ExcelImport_Error\"
+$lastModLogFileName     = "last_time_modified.txt"
+
+# Initialize default error folder locations
+$errorFolderPath        = "D:\Scripts\Stock Blackboard\Import_Error\"
 If (-Not (Test-Path $errorFolderPath)) {New-Item -Path $errorFolderPath -ItemType Directory}
 
 # Check for existence of the settings file
@@ -70,14 +72,13 @@ Get-Content $settingsFilePath | ForEach-Object {
     $settings[$paramValuePair[0]] = $paramValuePair[1]
 }
 
-# Read settings into variables
-
+# Initialize settings from file, where all business folder paths are stored
 $excelFilePath           = $settings['excelFilePath']
-$lastTimeFilePath        = $settings['lastTimeFilePath']
+$lastModLogFolderPath    = $settings['lastModLogFolderPath']
 $csvExportFolderPath     = $settings['csvExportFolderPath']
 $sheetsToExport          = $settings['sheetsToExport'] -split "," | ForEach-Object trim($it)
 
-$paramsToCheck = @($excelFilePath, $lastTimeFilePath, $csvExportFolderPath, $sheetsToExport)
+$paramsToCheck = @($excelFilePath, $lastModLogFolderPath, $csvExportFolderPath, $sheetsToExport)
 
 # Check for empty params 
 ForEach ($param in $paramsToCheck) { If ([string]::IsNullOrEmpty($param)) { Write-Error $errorFolderPath "Params missing. Review settings file under $settingsFilePath" Fatal} }
@@ -88,13 +89,19 @@ If (-Not(Test-Path $excelFilePath)) {Write-Error $errorFolderPath "No document f
 # Check for existence of csv export folder
 If (-Not (Test-Path $csvExportFolderPath)) {New-Item -Path $csvExportFolderPath -ItemType Directory}
 
+# Check for existence of time modified log folder
+If (-Not (Test-Path $lastModLogFolderPath)) {New-Item -Path $lastModLogFolderPath -ItemType Directory}
+
+# Build last modified log file path
+$lastModLogFilePath = Join-Path -Path $lastModLogFolderPath -ChildPath ($lastModLogFileName)
+
 # Fetch last edit time of the excel document
 $lastModifiedTime = (Get-Item $excelFilePath).LastWriteTime
 
-If (Test-Path $lastTimeFilePath) {
+If (Test-Path $lastModLogFilePath) {
 
     # If file exists get the last modified datetime
-    $lastKnownTime = New-Object DateTime (Get-Content $lastTimeFilePath)
+    $lastKnownTime = New-Object DateTime (Get-Content $lastModLogFilePath)
     Write-Host "Debug: lastKnownTime = $lastKnownTime"
 
 } else {
@@ -105,7 +112,7 @@ If (Test-Path $lastTimeFilePath) {
     Write-Host "Debug: Last modification time not found in file. lastKnownTime set to $lastKnownTime."
 }
 
-if ($lastModifiedTime -gt $lastKnownTime) {
+If ($lastModifiedTime -gt $lastKnownTime) {
 
     # File has been modified since last check
     Write-Host "Debug: File modified since $lastKnownTime."
@@ -165,7 +172,7 @@ if ($lastModifiedTime -gt $lastKnownTime) {
     Write-Host "Debug: Total matches : $matchCounter"
 
     # After all tabs are processed, update the last modification date in the text file for next run
-    Set-Content $lastTimeFilePath $lastModifiedTime.Ticks
+    Set-Content $lastModLogFilePath $lastModifiedTime.Ticks
 
 } else {
 
