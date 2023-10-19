@@ -109,7 +109,7 @@ ForEach ($settingsFile in $processingSettingsFiles) {
         $truncateCommand.ExecuteNonQuery()
     }
 
-    # Imprt csv file
+    # Import csv file
     $importFileData                 = Import-Csv -Path $importFilePath
 
     # Process rows from csv data
@@ -140,6 +140,7 @@ ForEach ($settingsFile in $processingSettingsFiles) {
     $connection.Close()
 
     # Log update
+    $lastImpLogFilePath = Join-Path -Path $lastImpLogFolderPath -ChildPath ($importFileName + "_" + $lastImpLogFileName)
     Set-Content $lastImpLogFilePath (Get-Date).Ticks
 
 }

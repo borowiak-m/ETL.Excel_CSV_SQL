@@ -61,7 +61,7 @@ $processingSettingsFolderPath   = "D:\Scripts\Stock Blackboards\Settings\"
 $processingSettingsFiles        = Get-ChildItem -Path $processingSettingsFolderPath -Filter *_extract_settings.txt
 $errorFolderPath                = "D:\Scripts\Stock Blackboard\Error\"
 $lastModLogFileName             = "last_time_modified.txt"
-$mainExtractSettingsFileName    = "main_extract_settings.txt"
+$mainExtractSettingsFileName    = "extract_settings.txt"
 $mainExtractSettingsFilePath    = Join-Path -Path $processingSettingsFolderPath -ChildPath ($mainExtractSettingsFileName)
 
 # Check for existence of the main extract settings file
@@ -109,18 +109,18 @@ ForEach ($settingsFile in $processingSettingsFiles) {
     $exportSourceFolderPath  = $settings['exportSourceFolderPath']
     $sheetsToExport          = $settings['sheetsToExport'] -split "," | ForEach-Object trim($it)
 
+    $exportFileBaseName      = ($settingsFile.BaseName -replace "_export_settings", "")
+    $exportFileName          = ($settingsFile.BaseName -replace "_export_settings", "") + $exportFileExtention
+    $exportFilePath          = Join-Path -Path $exportSourceFolderPath -ChildPath ($exportFileName)
+
     # Check for empty params 
     $paramsToCheck           = @($exportFileExtention,$exportSourceFolderPath ,$sheetsToExport)
     ForEach ($param in $paramsToCheck) { If ([string]::IsNullOrEmpty($param)) { $hasEmptyParams = true } }
 
     If ($hasEmptyParams){ 
-        Write-Error $errorFolderPath "Params missing. File $exportFilePath is skipped from extract process. Review settings file under $settingsFilePath" NotFatal
+        Write-Error $errorFolderPath "Params missing. File $exportFileBaseName is skipped from extract process. Review settings file under $settingsFilePath" NotFatal
         Continue
     }
-
-    $exportFileBaseName      = ($settingsFile.BaseName -replace "_export_settings", "")
-    $exportFileName          = ($settingsFile.BaseName -replace "_export_settings", "") + $exportFileExtention
-    $exportFilePath          = Join-Path -Path $exportSourceFolderPath -ChildPath ($exportFileName)
 
     # Check for the existence of extract document
     If (-Not(Test-Path $exportFilePath)) {  
