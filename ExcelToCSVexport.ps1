@@ -26,7 +26,7 @@ function Write-Error($errorFolderPath, $errorMsg, $errorLvl) {
     Write-Host $errorMsg                            
 
     # Generate a timestamp for error file name
-    $timestamp = Get-Date -format "yyyy.MM.dd hh.mm.ss"
+    $timestamp = Get-Date -format "yyyy.MM.dd HH.mm"
 
     # Generate a date for error file name
     $errorDate = Get-Date -format "yyyyMMdd"
@@ -196,7 +196,7 @@ ForEach ($settingsFile in $processingSettingsFiles) {
                         Write-Error $errorFolderPath "Unprocessed file $csvExportFilePath. File renamed and moved to $errorFolderPath." NotFatal
 
                         # Generate a timestamp for error file name
-                        $timestamp = Get-Date -format "yyyy.MM.dd hh.mm.ss"
+                        $timestamp = Get-Date -format "yyyy.MM.dd HH.mm"
 
                         # Move existing file to error folder and rename it with a timestamp
                         $csvErrorFilePath = Join-Path -Path $errorFolderPath -ChildPath ("Unprocessed $sheet $timestamp.csv")

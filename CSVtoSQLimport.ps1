@@ -25,7 +25,7 @@ function Write-Error($errorFolderPath, $errorMsg, $errorLvl) {
     Write-Host $errorMsg                            
 
     # Generate a timestamp for error file name
-    $timestamp = Get-Date -format "yyyy.MM.dd hh.mm.ss"
+    $timestamp = Get-Date -format "yyyy.MM.dd HH.mm"
 
     # Generate a date for error file name
     $errorDate = Get-Date -format "yyyyMMdd"
@@ -120,9 +120,6 @@ ForEach ($settingsFile in $processingSettingsFiles) {
         Continue 
     }
 
-    # Post processing file npath
-    $importProcessedFilePath        = Join-Path -Path $importProcessedFolderPath -ChildPath ($importFileName)
-
     # Check for empty params 
     $hasEmptyParams                 = $false
     $paramsToCheck                  = @($importTable, $importTablePK, $importFieldNames, $importMode, $importServerName, $importDatabaseName)
@@ -201,6 +198,12 @@ ForEach ($settingsFile in $processingSettingsFiles) {
 
     # Close connection
     $connection.Close()
+
+    # Generate a timestamp for processed file name
+    $timestamp                          = Get-Date -format "yyyy.MM.dd HH.mm"
+
+    # Processed file path with a timestamp
+    $importProcessedFilePath            = Join-Path -Path $importProcessedFolderPath -ChildPath ("$timestamp $importFileName")
 
     # Move processed file to Completed folder
     Move-Item -Path $importFilePath -Destination $importProcessedFilePath
