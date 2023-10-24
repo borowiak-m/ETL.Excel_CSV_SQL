@@ -17,7 +17,7 @@
 #   where others will be config updates which will overwrite an entire table. These will be small in size. The indicating
 #   flag on how to update data will also be held in a settings file, particular to its import.
 #
-#
+
 
 function Write-Error($errorFolderPath, $errorMsg, $errorLvl) {
 
@@ -73,12 +73,13 @@ Get-Content $mainImportSettingsFilePath | ForEach-Object {
 }
 
 # Initialize settings from file, where all business folder paths are stored
-$lastImpLogFolderPath       = $importSettings['lastImpLogFolderPath']
-$importFilesFolderPath      = $importSettings['importFilesFolderPath']
-$overwriteMode              = $importSettings['overwriteMode']
-$appendMode                 = $importSettings['appendMode']
+$lastImpLogFolderPath               = $importSettings['lastImpLogFolderPath']
+$importFilesFolderPath              = $importSettings['importFilesFolderPath']
+$importProcessedFolderPath          = $importSettings['importProcessedFolderPath']
+$overwriteMode                      = $importSettings['overwriteMode']
+$appendMode                         = $importSettings['appendMode']
 
-$paramsToCheck = @($lastImpLogFolderPath, $importFilesFolderPath, $overwriteMode, $appendMode)
+$paramsToCheck = @($lastImpLogFolderPath, $importFilesFolderPath, $importProcessedFolderPath, $overwriteMode, $appendMode)
 
 # Check for empty params 
 ForEach ($param in $paramsToCheck) { If ([string]::IsNullOrEmpty($param)) { Write-Error $errorFolderPath "Params missing. Review settings file under $mainImportSettingsFilePath" Fatal} }
@@ -86,6 +87,7 @@ ForEach ($param in $paramsToCheck) { If ([string]::IsNullOrEmpty($param)) { Writ
 # Check for existence of last time imported log folder and the import folder
 If (-Not (Test-Path $importFilesFolderPath)) {Write-Error $errorFolderPath "Import folder missing. Review settings file under $mainImportSettingsFilePath" Fatal}
 If (-Not (Test-Path $lastImpLogFolderPath)) {New-Item -Path $lastImpLogFolderPath -ItemType Directory}
+If (-Not (Test-Path $importProcessedFolderPath)) {New-Item $importProcessedFolderPath -ItemType Directory}
 
 # Loop through each settings file
 ForEach ($settingsFile in $processingSettingsFiles) {
@@ -101,23 +103,35 @@ ForEach ($settingsFile in $processingSettingsFiles) {
         $settings[$key] = $val
     }
 
-    $importTable        = $settings['importTable']
-    $importTablePK      = $settings['importTablePK']
-    $importFieldNames   = $settings['importFieldNames']
-    $importMode         = $settings['importMode']
-    $importServerName   = $settings['importServerName']
-    $importDatabaseName = $settings['importDatabaseName']
+    $importTable                    = $settings['importTable']
+    $importTablePK                  = $settings['importTablePK']
+    $importFieldNames               = $settings['importFieldNames']
+    $importMode                     = $settings['importMode']
+    $importServerName               = $settings['importServerName']
+    $importDatabaseName             = $settings['importDatabaseName']
 
-    $importFileName     = ($settingsFile.BaseName -replace "_import_settings", "") + ".csv"
-    $importFilePath     = Join-Path -Path $importFilesFolderPath -ChildPath ($importFileName)
+    # Processing file path
+    $importFileName                 = ($settingsFile.BaseName -replace "_import_settings", "") + ".csv"
+    $importFilePath                 = Join-Path -Path $importFilesFolderPath -ChildPath ($importFileName)
+
+    # Check if there is a file to pick up
+    If (-Not (Test-Path $importFilePath)) { 
+        Write-Host "No file $importFilePath to process. Moving to the next file"
+        Continue 
+    }
+
+    # Post processing file npath
+    $importProcessedFilePath        = Join-Path -Path $importProcessedFolderPath -ChildPath ($importFileName)
 
     # Check for empty params 
-    $hasEmptyParams = $false
-    $paramsToCheck           = @($importTable, $importTablePK, $importFieldNames, $importMode, $importServerName, $importDatabaseName)
+    $hasEmptyParams                 = $false
+    $paramsToCheck                  = @($importTable, $importTablePK, $importFieldNames, $importMode, $importServerName, $importDatabaseName)
     ForEach ($param in $paramsToCheck) { If ([string]::IsNullOrEmpty($param)) { $hasEmptyParams = $true } }
 
     If ($hasEmptyParams){ 
         Write-Error $errorFolderPath "Params missing. File $importFileName is skipped from extract process. Review settings file under $settingsFilePath." NotFatal
+        # Leaving file in folder for next pickup cycle
+        # Need to communicate to users / service team that the file or settings file needs attention as no updates are happening while unresolved
         Continue
     }
 
@@ -129,11 +143,27 @@ ForEach ($settingsFile in $processingSettingsFiles) {
     $connection.Open()
 
     # Check if connection was successfully open 
-    # TO BE ERROR HANDLED 
-    If ($connection.State -ne 'Open') {Throw "Could not establish connection to $importServerName for CSV import process for file $importFilePath."}
+    If ($connection.State -ne 'Open') {
+        Write-Error $errorFolderPath "Could not establish connection to $importServerName for CSV import process for file $importFilePath." NotFatal
+        # Leaving file in folder for next pickup cycle
+        # Need to communicate to users / service team that the file or settings file needs attention as no updates are happening while unresolved
+    }
+
+    # Check if destination table exists
+    try {
+        $tableCheckCommand             = $connection.CreateCommand()
+        $tableCheckCommand.CommandText = "SELECT TOP 1 * FROM $importTable"
+        $tableCheckCommand.ExecuteNonQuery()
+    }
+    catch {
+        Write-Error $errorFolderPath "Could not connect to $importTable. File $importFileName can't be processed." NotFatal
+        # Leaving file in folder for next pickup cycle
+        # Need to communicate to users / service team that the file or settings file needs attention as no updates are happening while unresolved
+        Continue
+    }
 
     # If import mode is overwrite
-    #   Clear import table before import
+    # Clear import table before import
     If ($importMode -eq $overwriteMode) {
         $truncateCommand             = $connection.CreateCommand()
         $truncateCommand.CommandText = "TRUNCATE TABLE $importTable"
@@ -169,8 +199,11 @@ ForEach ($settingsFile in $processingSettingsFiles) {
         #Write-Host $sqlQuery
     }
 
-    #Close connection
+    # Close connection
     $connection.Close()
+
+    # Move processed file to Completed folder
+    Move-Item -Path $importFilePath -Destination $importProcessedFilePath
 
     # Log update
     $lastImpLogFilePath = Join-Path -Path $lastImpLogFolderPath -ChildPath ($importFileName + "_" + $lastImpLogFileName)
