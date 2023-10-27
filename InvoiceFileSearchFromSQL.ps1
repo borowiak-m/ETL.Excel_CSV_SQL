@@ -2,7 +2,7 @@
 Import-Module SqlServer
 
 # Init vars
-$settingsFilePath           = "D:\Scripts\WAGA_PODS\Settings\settings.txt"
+$settingsFilePath           = "D:\Scripts\PODS\Settings\settings.txt"
 
 # Get settings params from a settings txt file
 $settings = @{}
