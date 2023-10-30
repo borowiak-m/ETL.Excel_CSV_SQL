@@ -5,7 +5,10 @@
 # - Read process params (folder paths) from a settings text file
 # - Loop through the monitored folders and check file age
 # - If file is older than X days, delete the file
-#
+# - Folders to monitor for old files: $errorFolderPath, $csvExportFolderPath, $importProcessedFolderPath:
+#     - $errorFolderPath - path where erros logs are kept and files not processed
+#     - $csvExportFolderPath - path where csv sheets are exported from business docs, and imported from to db 
+#     - $importProcessedFolderPath - path where processed import csv files are moved
 
 # Initialize default logging and settings folders
 
