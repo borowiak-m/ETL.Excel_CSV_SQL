@@ -78,6 +78,7 @@ $importFilesFolderPath              = $importSettings['importFilesFolderPath']
 $importProcessedFolderPath          = $importSettings['importProcessedFolderPath']
 $overwriteMode                      = $importSettings['overwriteMode']
 $appendMode                         = $importSettings['appendMode']
+If (-Not([String]::IsNullOrEmpty($importtSettings['errorFolderPath']))) {$errorFolderPath = $importSettings['errorFolderPath']}
 
 $paramsToCheck = @($lastImpLogFolderPath, $importFilesFolderPath, $importProcessedFolderPath, $overwriteMode, $appendMode)
 

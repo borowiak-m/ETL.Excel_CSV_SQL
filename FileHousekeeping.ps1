@@ -14,6 +14,7 @@
 
 $processingSettingsFolderPath   = "D:\Scripts\Stock Blackboard\Settings\"
 $processingSettingsFiles        = Get-ChildItem -Path $processingSettingsFolderPath -Filter *settings.txt
+$errorFolderPath                = "D:\Scripts\Stock Blackboard\Error\"
 
 # Check if settings files exist
 If (-Not (Test-Path $processingSettingsFolderPath)) { Throw "No settings folder found" }

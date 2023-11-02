@@ -82,6 +82,7 @@ Get-Content $mainexportSettingsFilePath | ForEach-Object {
 # Initialize settings from file, where all business folder paths are stored
 $lastModLogFolderPath    = $exportSettings['lastModLogFolderPath']
 $csvExportFolderPath     = $exportSettings['csvExportFolderPath']
+If (-Not([String]::IsNullOrEmpty($exportSettings['errorFolderPath']))) {$errorFolderPath = $exportSettings['errorFolderPath']}
 
 $paramsToCheck = @($lastModLogFolderPath, $csvExportFolderPath)
 
