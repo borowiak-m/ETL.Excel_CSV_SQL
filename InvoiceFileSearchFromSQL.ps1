@@ -1,3 +1,15 @@
+#  LOGIC EXPLAINED
+# ---------------
+# This script aims to copy any PODs, for a given set of invoice numbers in a CSV file, from a system location to a specified folder location. 
+# We achieve this following this logic:
+#
+# - Read process params (folder paths) from a settings text file
+# - Get invoice numbers from a CSV file (where the Found field is not "Yes" - in case we are reprocessing same file)
+# - Connect to a production sever and execute a query to fetch all POD folder paths for provided invoice documents
+# - Loop over the set of file paths and copy to a given folder location
+# - Report back to the CSV file on each file if found or not
+# - Report the total number of files found for a total of invoice numbers provided (sometimes multiple POd per invoice)
+
 
 Import-Module SqlServer
 
