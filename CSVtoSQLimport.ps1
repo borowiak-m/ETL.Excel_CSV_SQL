@@ -49,9 +49,19 @@ function Write-Error($errorFolderPath, $errorMsg, $errorLvl) {
 
 }
 
+function EncloseWithBrackets($name) {
+    # Check for spaces in SQL object names and enslose in [] if found
+    If ($name -like "* *") {
+        return "[$name]"
+    } else {
+        return $name
+    }
+
+}
+
 # Initialize default error folder locations and file names
 $processingSettingsFolderPath   = "D:\Scripts\Stock Blackboard\Settings\"
-$processingSettingsFiles        = Get-ChildItem -Path $processingSettingsFolderPath -Filter *_import_settings.txt
+$processingSettingsFiles        = Get-ChildItem -Path (Join-Path $processingSettingsFolderPath -ChildPath "import files") -Filter *_import_settings.txt
 $errorFolderPath                = "D:\Scripts\Stock Blackboard\Error\"
 $lastImpLogFileName             = "last_time_imported.txt"
 $mainImportSettingsFileName     = "import_settings.txt"
@@ -78,7 +88,7 @@ $importFilesFolderPath              = $importSettings['importFilesFolderPath']
 $importProcessedFolderPath          = $importSettings['importProcessedFolderPath']
 $overwriteMode                      = $importSettings['overwriteMode']
 $appendMode                         = $importSettings['appendMode']
-If (-Not([String]::IsNullOrEmpty($importtSettings['errorFolderPath']))) {$errorFolderPath = $importSettings['errorFolderPath']}
+If (-Not([String]::IsNullOrEmpty($importSettings['errorFolderPath']))) {$errorFolderPath = $importSettings['errorFolderPath']}
 
 $paramsToCheck = @($lastImpLogFolderPath, $importFilesFolderPath, $importProcessedFolderPath, $overwriteMode, $appendMode)
 
@@ -93,13 +103,10 @@ If (-Not (Test-Path $importProcessedFolderPath)) {New-Item $importProcessedFolde
 # Loop through each settings file
 ForEach ($settingsFile in $processingSettingsFiles) {
 
-    # Build current settings file path
-    $settingsFilePath   = Join-Path -Path $processingSettingsFolderPath -ChildPath ($settingsFile.Name)
-
     # Read the settings file and fetch params
     $settings = @{}
 
-    Get-Content $settingsFilePath | ForEach-Object {
+    Get-Content $settingsFile.FullName | ForEach-Object {
         $key, $val      = $_ -split "="
         $settings[$key] = $val
     }
@@ -114,6 +121,10 @@ ForEach ($settingsFile in $processingSettingsFiles) {
     # Processing file path
     $importFileName                 = ($settingsFile.BaseName -replace "_import_settings", "") + ".csv"
     $importFilePath                 = Join-Path -Path $importFilesFolderPath -ChildPath ($importFileName)
+
+    # Enclose in [] names with spaces if required
+    $enclosedImportTable            = EncloseWithBrackets $importTable
+    $enclosedFieldNames             = $importFieldNames | ForEach-Object { EncloseWithBrackets $it } -join "," 
 
     # Check if there is a file to pick up
     If (-Not (Test-Path $importFilePath)) { 
@@ -150,11 +161,11 @@ ForEach ($settingsFile in $processingSettingsFiles) {
     # Check if destination table exists
     try {
         $tableCheckCommand             = $connection.CreateCommand()
-        $tableCheckCommand.CommandText = "SELECT TOP 1 * FROM $importTable"
+        $tableCheckCommand.CommandText = "SELECT TOP 1 * FROM $enclosedImportTable"
         $tableCheckCommand.ExecuteNonQuery()
     }
     catch {
-        Write-Error $errorFolderPath "Could not connect to $importTable. File $importFileName can't be processed." NotFatal
+        Write-Error $errorFolderPath "Could not connect to $enclosedImportTable. File $importFileName can't be processed." NotFatal
         # Leaving file in folder for next pickup cycle
         # Need to communicate to users / service team that the file or settings file needs attention as no updates are happening while unresolved
         Continue
@@ -164,21 +175,27 @@ ForEach ($settingsFile in $processingSettingsFiles) {
     # Clear import table before import
     If ($importMode -eq $overwriteMode) {
         $truncateCommand             = $connection.CreateCommand()
-        $truncateCommand.CommandText = "TRUNCATE TABLE $importTable"
+        $truncateCommand.CommandText = "TRUNCATE TABLE $enclosedImportTable"
         $truncateCommand.ExecuteNonQuery()
     }
 
     # Import csv file
     $importFileData                 = Import-Csv -Path $importFilePath
 
+    Write-Host "DEBUG: Import field names: $enclosedFieldNames"
+
     # Process rows from csv data
     ForEach ($row in $importFileData) {
-
-        $values     = @($importFieldNames.Split(',').ForEach({ $row.$_ }) -join "','")
-        $updates    = ($importFieldNames -split "," | ForEach-Object {"$_ = '$($row.$_)'"}) -join ","
+        Write-Host $row
+        
+        
 
         # If update flag is append
         If ($importMode -eq $appendMode) {
+
+            $values     = @($importFieldNames.Split(',').ForEach({ $row.$_ }) -join "','")
+            $updates    = ($importFieldNames -split "," | ForEach-Object {"$_ = '$($row.$_)'"}) -join ","
+
             # upsert query
             $sqlQuery = "IF EXISTS (SELECT $importTablePK FROM $importTable WHERE $importTablePK = '$($row.$importTablePK)')
                             UPDATE $importTable
@@ -187,14 +204,22 @@ ForEach ($settingsFile in $processingSettingsFiles) {
                         ELSE
                             INSERT INTO $importTable ($importFieldNames) VALUES ('$values')"
         } else {
-            # simple insert query
-            $sqlQuery = "INSERT INTO $importTable ($importFieldNames) VALUES ('$values')"
+            # If all fields are inserted as they are in the CSV file
+            If ($importFieldNames -eq "All") {
+                $values = @($row.PSObject.Properties.Value) -join "','"
+                $sqlQuery = "INSERT INTO $importTable VALUES ('$values')"
+            } else {
+                # If inserts are only for specified fields, fetch their values only
+                $values     = @($importFieldNames.Split(',').ForEach({ $row.$_ }) -join "','")
+                $sqlQuery = "INSERT INTO $importTable ($importFieldNames) VALUES ('$values')"
+            }
         }
 
+        Write-Host $sqlQuery
         $command                        = $connection.CreateCommand()
         $command.CommandText            = $sqlQuery 
         $command.ExecuteNonQuery()
-        #Write-Host $sqlQuery
+        
     }
 
     # Close connection
