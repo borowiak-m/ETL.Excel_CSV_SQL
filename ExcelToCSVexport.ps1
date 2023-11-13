@@ -58,7 +58,7 @@ function Write-Error($errorFolderPath, $errorMsg, $errorLvl) {
 
 # Initialize default error folder locations and file names
 $processingSettingsFolderPath   = "D:\Scripts\Stock Blackboard\Settings\"
-$processingSettingsFiles        = Get-ChildItem -Path $processingSettingsFolderPath -Filter *_export_settings.txt
+$processingSettingsFiles        = Get-ChildItem -Path (Join-Path $processingSettingsFolderPath -ChildPath "export files") -Filter *_export_settings.txt
 $errorFolderPath                = "D:\Scripts\Stock Blackboard\Error\"
 $lastModLogFileName             = "last_time_modified.txt"
 $mainExportSettingsFileName     = "export_settings.txt"
@@ -109,6 +109,7 @@ ForEach ($settingsFile in $processingSettingsFiles) {
     $exportFileExtention     = $exportSettings['exportFileExtention']
     $exportSourceFolderPath  = $exportSettings['exportSourceFolderPath']
     $sheetsToExport          = $exportSettings['sheetsToExport'] -split "," | ForEach-Object trim($it)
+    $headerRow               = $exportSettings['headerRow']
 
     $exportFileBaseName      = ($settingsFile.BaseName -replace "_export_settings", "")
     $exportFileName          = ($settingsFile.BaseName -replace "_export_settings", "") + $exportFileExtention
@@ -188,7 +189,7 @@ ForEach ($settingsFile in $processingSettingsFiles) {
                     $csvExportFilePath = Join-Path -Path $csvExportFolderPath -ChildPath ("$sheet.csv")
 
                     # Read from excel file
-                    $allData = Import-Excel -Path $exportFilePath -WorksheetName $sheet
+                    $allData = Import-Excel -Path $exportFilePath -WorksheetName $sheet -StartRow $headerRow
 
                     # Check if an export csv file already exists (if so move it to Error folder and replace it)
                     If (Test-Path $csvExportFilePath) {
@@ -206,7 +207,7 @@ ForEach ($settingsFile in $processingSettingsFiles) {
                     } 
 
                     #Export to csv
-                    $allData | Export-Csv -Path $csvExportFilePath -NoTypeInformation -Encoding UTF8
+                    $allData | Export-Csv -Path $csvExportFilePath -NoTypeInformation -Encoding UTF8 
 
 
                 } else {
