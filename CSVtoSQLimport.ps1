@@ -13,10 +13,7 @@
 # - Any new files will need a table created with same field names as in the csv file and a settings file created and dropped in 
 #   the monitored folder. 
 #
-# - There will be two types of data imports. And append and an overwrite, where some tables collect ongoing business data,
-#   where others will be config updates which will overwrite an entire table. These will be small in size. The indicating
-#   flag on how to update data will also be held in a settings file, particular to its import.
-#
+
 
 
 function Write-Error($errorFolderPath, $errorMsg, $errorLvl) {
@@ -59,6 +56,27 @@ function EncloseWithBrackets($name) {
 
 }
 
+function SanitizeString($inputString) {
+    # Define forbidden characters
+    $forbiddenChars     = @("'",";","--")
+
+    # Define a list of common SQL syntaxt words to look out for
+    $sqlSyntaxWords     = @("SELECT", "DROP", "INSERT", "DELETE", "UPDATE", "EXEC", "EXECUTE", "ALTER", "CREATE", "GRANT", "REVOKE", "TRUNCATE", "TABLE", "TABLES"
+                            "select", "drop", "insert", "delete", "update", "exec" , "execute", "alter", "create", "grant", "revoke", "truncate", "table", "tables")
+
+    # Remove forbidden characters
+    ForEach ($char in $forbiddenChars) {
+        $inputString    = $inputString.Replace($char,'')
+    }
+
+    # Alter any SQL syntax words
+    ForEach ($word in $sqlSyntaxWords) {
+        $inputString = $inputString.Replace($word, "[[$word]]")
+    }
+
+    return $inputString
+}
+
 # Initialize default error folder locations and file names
 $processingSettingsFolderPath   = "D:\Scripts\Stock Blackboard\Settings\"
 $processingSettingsFiles        = Get-ChildItem -Path (Join-Path $processingSettingsFolderPath -ChildPath "import files") -Filter *_import_settings.txt
@@ -86,8 +104,7 @@ Get-Content $mainImportSettingsFilePath | ForEach-Object {
 $lastImpLogFolderPath               = $importSettings['lastImpLogFolderPath']
 $importFilesFolderPath              = $importSettings['importFilesFolderPath']
 $importProcessedFolderPath          = $importSettings['importProcessedFolderPath']
-$overwriteMode                      = $importSettings['overwriteMode']
-$appendMode                         = $importSettings['appendMode']
+
 If (-Not([String]::IsNullOrEmpty($importSettings['errorFolderPath']))) {$errorFolderPath = $importSettings['errorFolderPath']}
 
 $paramsToCheck = @($lastImpLogFolderPath, $importFilesFolderPath, $importProcessedFolderPath, $overwriteMode, $appendMode)
@@ -114,7 +131,6 @@ ForEach ($settingsFile in $processingSettingsFiles) {
     $importTable                    = $settings['importTable']
     $importTablePK                  = $settings['importTablePK']
     $importFieldNames               = $settings['importFieldNames']
-    $importMode                     = $settings['importMode']
     $importServerName               = $settings['importServerName']
     $importDatabaseName             = $settings['importDatabaseName']
 
@@ -124,7 +140,6 @@ ForEach ($settingsFile in $processingSettingsFiles) {
 
     # Enclose in [] names with spaces if required
     $enclosedImportTable            = EncloseWithBrackets $importTable
-    $enclosedFieldNames             = $importFieldNames | ForEach-Object { EncloseWithBrackets $it } -join "," 
 
     # Check if there is a file to pick up
     If (-Not (Test-Path $importFilePath)) { 
@@ -158,67 +173,53 @@ ForEach ($settingsFile in $processingSettingsFiles) {
         # Need to communicate to users / service team that the file or settings file needs attention as no updates are happening while unresolved
     }
 
-    # Check if destination table exists
+    # Clear table before import
     try {
-        $tableCheckCommand             = $connection.CreateCommand()
-        $tableCheckCommand.CommandText = "SELECT TOP 1 * FROM $enclosedImportTable"
-        $tableCheckCommand.ExecuteNonQuery()
-    }
-    catch {
-        Write-Error $errorFolderPath "Could not connect to $enclosedImportTable. File $importFileName can't be processed." NotFatal
-        # Leaving file in folder for next pickup cycle
-        # Need to communicate to users / service team that the file or settings file needs attention as no updates are happening while unresolved
-        Continue
-    }
-
-    # If import mode is overwrite
-    # Clear import table before import
-    If ($importMode -eq $overwriteMode) {
         $truncateCommand             = $connection.CreateCommand()
         $truncateCommand.CommandText = "TRUNCATE TABLE $enclosedImportTable"
         $truncateCommand.ExecuteNonQuery()
     }
+    catch {
+        # Log error if sql command didn't execute as excpected  
+        Write-Error $errorFolderPath $_.Exception.Message NotFatal
+        # Skip to next file in the loop
+        Continue
+    }
 
     # Import csv file
-    $importFileData                 = Import-Csv -Path $importFilePath
-
-    Write-Host "DEBUG: Import field names: $enclosedFieldNames"
+    $importFileData              = Import-Csv -Path $importFilePath
 
     # Process rows from csv data
     ForEach ($row in $importFileData) {
-        Write-Host $row
-        
-        
 
-        # If update flag is append
-        If ($importMode -eq $appendMode) {
+        # Sanitize all string values for SQL input
+        $row.PSObject.Properties | ForEach-Object { $_.Value = SanitizeString $_.Value }
 
-            $values     = @($importFieldNames.Split(',').ForEach({ $row.$_ }) -join "','")
-            $updates    = ($importFieldNames -split "," | ForEach-Object {"$_ = '$($row.$_)'"}) -join ","
+        # If primary key field is empty, skip the row
+        If ([String]::IsNullOrEmpty($row.$importTablePK)) {Continue}
 
-            # upsert query
-            $sqlQuery = "IF EXISTS (SELECT $importTablePK FROM $importTable WHERE $importTablePK = '$($row.$importTablePK)')
-                            UPDATE $importTable
-                            SET $updates
-                            WHERE $importTablePK = '$($row.$importTablePK)'
-                        ELSE
-                            INSERT INTO $importTable ($importFieldNames) VALUES ('$values')"
+        # If all fields are inserted as they are in the CSV file
+        If ($importFieldNames -eq "All") {
+            $values                 = ($row.PSObject.Properties.Value) -join "','"
         } else {
-            # If all fields are inserted as they are in the CSV file
-            If ($importFieldNames -eq "All") {
-                $values = @($row.PSObject.Properties.Value) -join "','"
-                $sqlQuery = "INSERT INTO $importTable VALUES ('$values')"
-            } else {
-                # If inserts are only for specified fields, fetch their values only
-                $values     = @($importFieldNames.Split(',').ForEach({ $row.$_ }) -join "','")
-                $sqlQuery = "INSERT INTO $importTable ($importFieldNames) VALUES ('$values')"
-            }
+            # If inserts are only for specified fields, fetch their values only
+            $values                 = $importFieldNames.Split(',').ForEach({ $row.$_ }) -join "','"
         }
 
-        Write-Host $sqlQuery
-        $command                        = $connection.CreateCommand()
-        $command.CommandText            = $sqlQuery 
-        $command.ExecuteNonQuery()
+        $sqlQuery               = "INSERT INTO $enclosedImportTable VALUES ('$values')"
+        Write-Host "SQL query: $sqlQuery"
+        
+        try {
+            $command                        = $connection.CreateCommand()
+            $command.CommandText            = $sqlQuery 
+            $command.ExecuteNonQuery()
+        } 
+        catch {
+            Write-Error $errorFolderPath $_.Exception.Message NotFatal
+            # Skip to next row in the loop
+            Continue
+        }
+        
         
     }
 
