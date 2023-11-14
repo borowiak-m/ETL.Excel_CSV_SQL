@@ -18,7 +18,7 @@
 
 function Write-Error($errorFolderPath, $errorMsg, $errorLvl) {
 
-    # Log error in cmd
+    # Log error in cmds
     Write-Host $errorMsg                            
 
     # Generate a timestamp for error file name
@@ -32,9 +32,9 @@ function Write-Error($errorFolderPath, $errorMsg, $errorLvl) {
 
     # Check if file already exists, if so append the error message to existing file, if not create a new error file
     If (Test-Path $errorLogFilePath) {
-        Add-Content $errorLogFilePath "$timestamp $errorMsg"
+        Add-Content $errorLogFilePath "$timestamp File name: $importFileName. Error: $errorMsg"
     } else {
-        Set-Content $errorLogFilePath "$timestamp $errorMsg"
+        Set-Content $errorLogFilePath "$timestamp File name: $importFileName. Error: $errorMsg"
     }
 
     If ($errorLvl -eq "Fatal") {
@@ -75,6 +75,20 @@ function SanitizeString($inputString) {
     }
 
     return $inputString
+}
+
+function ConvertExcelDateToSQL($excelDate) {
+    Write-Host "Passed excel date value: $excelDate"
+    $origin = [datetime]"1900-01-01"
+    try {
+        $date   = [datetime]$origin.AddDays([double]$excelDate)
+    }
+    catch {
+        Write-Error $errorFolderPath "Incorrect date format in value $excelDate" NotFatal
+        return $null
+    }
+    
+    return  $date.ToString("yyyy-MM-dd HH:mm:ss")
 }
 
 # Initialize default error folder locations and file names
@@ -124,7 +138,7 @@ ForEach ($settingsFile in $processingSettingsFiles) {
     $settings = @{}
 
     Get-Content $settingsFile.FullName | ForEach-Object {
-        $key, $val      = $_ -split "="
+        $key, $val      = $_ -split "=="
         $settings[$key] = $val
     }
 
@@ -133,6 +147,12 @@ ForEach ($settingsFile in $processingSettingsFiles) {
     $importFieldNames               = $settings['importFieldNames']
     $importServerName               = $settings['importServerName']
     $importDatabaseName             = $settings['importDatabaseName']
+    $importDatetimeFields           = $settings['importDatetimeFields']
+
+    # Check if any datetime conversion is required
+    $isDatetimeConversionRequired = $false
+    ForEach ($field in $importDatetimeFields) { If (-Not([string]::IsNullOrEmpty($field))) { $isDatetimeConversionRequired = $true } }
+    Write-Host "Datetime conversion is required? : $isDatetimeConversionRequired"
 
     # Processing file path
     $importFileName                 = ($settingsFile.BaseName -replace "_import_settings", "") + ".csv"
@@ -192,8 +212,18 @@ ForEach ($settingsFile in $processingSettingsFiles) {
     # Process rows from csv data
     ForEach ($row in $importFileData) {
 
-        # Sanitize all string values for SQL input
-        $row.PSObject.Properties | ForEach-Object { $_.Value = SanitizeString $_.Value }
+        # Validate CSV properties (.Name = header name and .Value = actual row value)
+        $row.PSObject.Properties | ForEach-Object { 
+            # Sanitize all string values for SQL input
+            $_.Value = SanitizeString $_.Value 
+
+            # If in row there is a defined datetime field for conversion, convert it to SQL format
+            If ($isDatetimeConversionRequired){
+                If ($importDatetimeFields -contains $_.Name) { 
+                    $_.Value = ConvertExcelDateToSQL $_.Value
+                }
+            }
+        }
 
         # If primary key field is empty, skip the row
         If ([String]::IsNullOrEmpty($row.$importTablePK)) {Continue}
@@ -219,8 +249,6 @@ ForEach ($settingsFile in $processingSettingsFiles) {
             # Skip to next row in the loop
             Continue
         }
-        
-        
     }
 
     # Close connection
