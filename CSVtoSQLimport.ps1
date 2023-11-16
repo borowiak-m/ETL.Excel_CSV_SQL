@@ -121,7 +121,7 @@ $importProcessedFolderPath          = $importSettings['importProcessedFolderPath
 
 If (-Not([String]::IsNullOrEmpty($importSettings['errorFolderPath']))) {$errorFolderPath = $importSettings['errorFolderPath']}
 
-$paramsToCheck = @($lastImpLogFolderPath, $importFilesFolderPath, $importProcessedFolderPath, $overwriteMode, $appendMode)
+$paramsToCheck = @($lastImpLogFolderPath, $importFilesFolderPath, $importProcessedFolderPath)
 
 # Check for empty params 
 ForEach ($param in $paramsToCheck) { If ([string]::IsNullOrEmpty($param)) { Write-Error $errorFolderPath "Params missing. Review settings file under $mainImportSettingsFilePath" Fatal} }
@@ -169,7 +169,7 @@ ForEach ($settingsFile in $processingSettingsFiles) {
 
     # Check for empty params 
     $hasEmptyParams                 = $false
-    $paramsToCheck                  = @($importTable, $importTablePK, $importFieldNames, $importMode, $importServerName, $importDatabaseName)
+    $paramsToCheck                  = @($importTable, $importTablePK, $importFieldNames, $importServerName, $importDatabaseName)
     ForEach ($param in $paramsToCheck) { If ([string]::IsNullOrEmpty($param)) { $hasEmptyParams = $true } }
 
     If ($hasEmptyParams){ 
